@@ -11,6 +11,14 @@
 #define QV2RAY_GENERATED_FILE_PATH (QV2RAY_GENERATED_DIR + "config.gen.json")
 #define QV_MODULE_NAME "V2RayInteraction"
 
+#ifdef QV2RAY_USE_V5_CORE
+#define V2RAY_CORE_VERSION_ARGV "version"
+#define V2RAY_CORE_CONFIG_ARGV "run", "-config"
+#else
+#define V2RAY_CORE_VERSION_ARGV "--version"
+#define V2RAY_CORE_CONFIG_ARGV "--config"
+#endif
+
 namespace Qv2ray::core::kernel
 {
 #if QV2RAY_FEATURE(kernel_check_permission)
@@ -167,7 +175,25 @@ namespace Qv2ray::core::kernel
             return { false, tr("No geosite.dat in assets path.") };
 
         // Check if V2Ray core returns a version number correctly.
+
         auto [exitCode, output] = RunProcess_(corePath, {"--version"});
+//      QProcess proc;
+// #ifdef Q_OS_WIN32
+        // nativeArguments are required for Windows platform, without a
+        // reason...
+//      proc.setProcessChannelMode(QProcess::MergedChannels);
+//      proc.setProgram(corePath);
+//      proc.setNativeArguments(V2RAY_CORE_VERSION_ARGV);
+//      proc.start();
+//#else
+//      proc.start(corePath, { V2RAY_CORE_VERSION_ARGV });
+//#endif
+//      proc.waitForStarted();
+//      proc.waitForFinished();
+//        auto exitCode = proc.exitCode();
+//
+//        if (exitCode != 0)
+//            return { false, tr("V2Ray core failed with an exit code: ") + QSTRN(exitCode) };
 
         LOG("V2Ray output: " + SplitLines(output).join(";"));
 
@@ -218,6 +244,7 @@ namespace Qv2ray::core::kernel
             QProcess process;
             process.setProcessEnvironment(env);
             DEBUG("Starting V2Ray core with test options");
+
             QStringList args;
             switch (version)
             {
@@ -233,6 +260,12 @@ namespace Qv2ray::core::kernel
                 default: break; // TODO: mark as unreachable
             }
             process.start(kernelPath, args, QIODevice::ReadWrite | QIODevice::Text);
+// #ifdef QV2RAY_USE_V5_CORE
+//             process.start(kernelPath, { "test", "-c", path }, QIODevice::ReadWrite | QIODevice::Text);
+// #else
+//             process.start(kernelPath, { "-test", "-config", path }, QIODevice::ReadWrite | QIODevice::Text);
+// #endif
+
             process.waitForFinished();
 
             if (process.exitCode() != 0)
@@ -296,6 +329,7 @@ namespace Qv2ray::core::kernel
         env.insert("v2ray.location.asset", GlobalConfig.kernelConfig.AssetsPath());
         env.insert("XRAY_LOCATION_ASSET", GlobalConfig.kernelConfig.AssetsPath());
         vProcess->setProcessEnvironment(env);
+
         auto version = GlobalConfig.kernelConfig.version;
         QStringList args;
         switch (version)
@@ -312,6 +346,8 @@ namespace Qv2ray::core::kernel
             default: break; // TODO: mark as unreachable
         }
         vProcess->start(GlobalConfig.kernelConfig.KernelPath(), args, QIODevice::ReadWrite | QIODevice::Text);
+//         vProcess->start(GlobalConfig.kernelConfig.KernelPath(), { V2RAY_CORE_CONFIG_ARGV, filePath }, QIODevice::ReadWrite | QIODevice::Text);
+
         vProcess->waitForStarted();
         kernelStarted = true;
 

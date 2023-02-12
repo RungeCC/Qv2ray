@@ -26,7 +26,9 @@ jobs:
     strategy:
       matrix:
         ui_type: [QWidget, QML]
-        platform: [ubuntu-20.04, windows-latest]
+        # platform: [ubuntu-20.04, windows-latest, macos-latest]
+        platform: [macos-latest, osx-arm64]
+        # build_type: [RelWithDebInfo, Release]
         build_type: [RelWithDebInfo, Release]
         qt_version: [6.0.0]
         include:
@@ -83,11 +85,27 @@ jobs:
           sudo apt update
           sudo apt install -y libgl-dev libx11-dev libxkbcommon-x11-dev libxcb-image0-dev libxcb-icccm4-dev libssl-dev libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0
           sudo apt install -y libprotobuf-dev protobuf-compiler protobuf-c-compiler libgrpc++-dev protobuf-compiler-grpc ninja-build fcitx-frontend-qt5 libcurl4-openssl-dev
+
+
+      # --------------------------------------------------------
+      - name: macOS - arm - ${{ matrix.qt_version }} - Build preparation - Install Packages
+        if: matrix.platform == 'osx-arm64'
+        run: |
+          brew install protobuf grpc ninja pkg-config openssl
+          brew install qt@6 go grpc cmake v2ray openssl
+          git clone https://github.com/Qv2ray/macdeployqt-patched
+          cd macdeployqt-patched
+          mkdir build; cd build;
+          cmake .. -DCMAKE_BUILD_TYPE=Release; cmake --build .
+          cp -v ./macdeployqt ${Qt6_DIR}/bin/macdeployqt
+      # --------------------------------------------------------
+
       # --------------------------------------------------------
       - name: macOS - ${{ matrix.qt_version }} - Build preparation - Install Packages
         if: matrix.platform == 'macos-latest'
         run: |
           brew install protobuf grpc ninja pkg-config openssl
+          brew install qt@6 go grpc cmake v2ray openssl
           git clone https://github.com/Qv2ray/macdeployqt-patched
           cd macdeployqt-patched
           mkdir build; cd build;
@@ -134,6 +152,33 @@ jobs:
           cmake --build . --parallel $(sysctl -n hw.logicalcpu)
           sudo cmake --install .
           appdmg ../assets/package_dmg.json ../Qv2ray.dmg
+      - name: macOS - arm64 - ${{ matrix.qt_version }} - Generate Dependencies and Build
+        shell: bash
+        if: matrix.platform == 'osx-arm64'
+        env:
+          PKG_CONFIG_PATH: /opt/homebrew/opt/openssl@1.1/lib/pkgconfig
+        run: |
+          mkdir build
+          cd build
+          # cmake -DQV2RAY_QT6=ON -DQV2RAY_AUTO_DEPLOY=OFF -DCMAKE_BUILD_TYPE=Release .. && make all -j8
+          cmake .. -GNinja \
+            -DCMAKE_INSTALL_PREFIX=installed \
+            -DQV2RAY_UI_TYPE=${{ matrix.ui_type }} \
+            -DQV2RAY_QT6=ON \
+            -DQV2RAY_AUTO_DEPLOY=OFF \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13 \
+            -DDS_STORE_SCRIPT=ON \
+            -DQV2RAY_DEFAULT_VASSETS_PATH=/usr/local/opt/v2ray/share/v2ray \
+            -DQV2RAY_DEFAULT_VCORE_PATH=/usr/local/opt/v2ray/bin/v2ray
+          cmake --build . --parallel $(sysctl -n hw.logicalcpu)
+          sudo cmake --install .
+          mkdir qv2ray.app/Contents/Resources/plugins/
+          # 我也不知道为啥编译出来的插件库不是 dylib 结尾
+          cp libQvPlugin-BuiltinProtocolSupport.so qv2ray.app/Contents/Resources/plugins/libQvPlugin-BuiltinProtocolSupport.dylib
+          cp libQvPlugin-BuiltinSubscriptionSupport.so qv2ray.app/Contents/Resources/plugins/libQvPlugin-BuiltinSubscriptionSupport.dylib
+          appdmg ../assets/package_dmg.json ../Qv2ray.dmg
+          
       # --------------------------------------------------------
       - name: Windows - ${{ matrix.qt_version }} - Generate Dependencies and Build
         shell: bash
